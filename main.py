@@ -7,15 +7,13 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 import edge_tts
 
-# အစ်ကို့ရဲ့ Token အသစ်
+# အစ်ကို့ရဲ့ Bot Token
 TOKEN = "8822125415:AAF9XHUbf3JTMa6jhNbtQOmdbOJEqlElxYU"
 
-# User များ ရွေးချယ်ထားသော အသံများကို မှတ်သားရန်
 user_voices = {}
 MALE_VOICE = "my-MM-ThihaNeural"
 FEMALE_VOICE = "my-MM-NilarNeural"
 
-# Render မအိပ်သွားစေရန် Dummy Server
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -32,7 +30,7 @@ def run_web_server():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "မင်္ဂလာပါ! သဘာဝကျသော AI အသံဖြင့် ဖတ်ပြပေးပါမည်။ စာသားကို တိုက်ရိုက် ပို့ပေးပါ။\n\n"
-        "🎛 **အသံပြောင်းလဲရန် အောက်ပါတို့ကို နှိပ်ပါ:**\n"
+        "🎛 **အသံပြောင်းလဲရန်:**\n"
         "/male - 👨 ယောကျ်ားလေးအသံ (Thiha)\n"
         "/female - 👩 မိန်းကလေးအသံ (Nilar)"
     )
@@ -51,20 +49,25 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text: return
         
     chat_id = update.message.chat_id
-    # Default အနေဖြင့် ယောကျ်ားလေးအသံကို အရင်သုံးမည်
     voice = user_voices.get(chat_id, MALE_VOICE) 
     
-    status = await update.message.reply_text("🎙️ Microsoft AI ဖြင့် အသံထုတ်လုပ်နေပါသည်...")
+    status = await update.message.reply_text("🎙️ အသံဖိုင် ထုတ်လုပ်နေပါသည်...")
     
     try:
         audio_path = os.path.join(tempfile.gettempdir(), f"{chat_id}_voice.mp3")
         
-        # edge-tts ဖြင့် အသံထုတ်လုပ်ခြင်း
         communicate = edge_tts.Communicate(text, voice)
         await communicate.save(audio_path)
         
+        # reply_voice အစား reply_audio ဖြင့် ပြောင်းပို့ထားပါသည် (Download ချ၍ရအောင်)
         with open(audio_path, 'rb') as f:
-            await update.message.reply_voice(voice=f, caption=text[:40])
+            await update.message.reply_audio(
+                audio=f,
+                filename="voice_audio.mp3",
+                title=text[:30],
+                performer="AI Voice",
+                caption=text[:40]
+            )
             
         await status.delete()
     except Exception as e:
@@ -73,15 +76,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_bot():
     app = ApplicationBuilder().token(TOKEN).build()
     
-    # Commands များ
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("male", set_male))
     app.add_handler(CommandHandler("female", set_female))
-    
-    # Text များ လက်ခံရန်
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
-    print("Edge-TTS Bot is running perfectly...")
+    print("Bot is running...")
     async with app:
         await app.start()
         await app.updater.start_polling(drop_pending_updates=True)
